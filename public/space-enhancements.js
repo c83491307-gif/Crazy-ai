@@ -17,12 +17,12 @@
   $('csvExport')?.addEventListener('click', () => {
     const rows = [['id','name','app','category','url','note','active','createdAt'],
       ...items.map(x => [x.id,x.name,x.app,x.category,x.url,x.note,x.active ? 'true' : 'false',new Date(x.createdAt || Date.now()).toISOString()])];
-    const csv = '\\uFEFF' + rows.map(row => row.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\\r\\n');
+    const csv = '\uFEFF' + rows.map(row => row.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
     download('creazzy-space.csv', csv, 'text/csv;charset=utf-8');
     log('تصدير CSV', items.length + ' مساحة'); toast('تم تصدير جدول CSV');
   });
   $('launchActive')?.addEventListener('click', () => {
-    const urls = items.filter(x => x.active && /^https?:\\/\\//i.test(x.url || ''));
+    const urls = items.filter(x => x.active && /^https?:\/\//i.test(x.url || ''));
     if (!urls.length) return toast('لا توجد روابط صالحة لمساحات نشطة');
     if (!confirm('سيتم فتح ' + urls.length + ' رابطاً في علامات تبويب جديدة. متابعة؟')) return;
     urls.forEach((x, i) => setTimeout(() => window.open(x.url, '_blank', 'noopener,noreferrer'), i * 220));
@@ -32,7 +32,7 @@
   $('activityBtn')?.addEventListener('click', () => {
     try {
       const list = JSON.parse(localStorage.getItem('creazzy-space-activity') || '[]');
-      alert(list.length ? list.slice(0, 30).map(x => new Date(x.at).toLocaleString('ar-EG') + ' — ' + x.action + ' — ' + x.detail).join('\\n') : 'لا يوجد نشاط مسجل بعد.');
+      alert(list.length ? list.slice(0, 30).map(x => new Date(x.at).toLocaleString('ar-EG') + ' — ' + x.action + ' — ' + x.detail).join('\n') : 'لا يوجد نشاط مسجل بعد.');
     } catch { alert('تعذر قراءة سجل النشاط'); }
   });
   const template = async (name, app, category, note, url = '') => {
@@ -50,7 +50,7 @@
       if (!actions || actions.querySelector('[data-clone-space]')) return;
       const edit = actions.querySelector('button[onclick*="editItem"]');
       if (!edit) return;
-      const idMatch = edit.getAttribute('onclick')?.match(/editItem\\('([^']+)'\\)/);
+      const idMatch = edit.getAttribute('onclick')?.match(/editItem\('([^']+)'\)/);
       if (!idMatch) return;
       const clone = document.createElement('button');
       clone.className = 'btn ghost'; clone.textContent = 'نسخ'; clone.dataset.cloneSpace = '1';
