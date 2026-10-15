@@ -3,6 +3,7 @@
 ## Added in this phase
 - Native Android app shell using Kotlin and the Android SDK.
 - Installed launchable app inventory with live search and launch actions.
+- Persistent app favorites and a favorites-only filter, stored in private app preferences.
 - APK document picker, package metadata inspection, and handoff to the official Android package installer.
 - FileProvider shares APKs from the app cache using scoped content URIs.
 - GitHub Actions workflow builds a debug APK and uploads it as an artifact.
