@@ -46,4 +46,4 @@ window.editItem=id=>{const x=items.find(x=>x.id===id);if(x)openModal(x)};window.
 $('export').onclick=()=>{const blob=new Blob([JSON.stringify({format:'creazzy-space-backup-v1',exportedAt:new Date().toISOString(),instances:items},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='creazzy-space-backup.json';a.click();URL.revokeObjectURL(a.href);toast('تم تجهيز النسخة الاحتياطية')};
 $('importBtn').onclick=()=>$('importFile').click();$('importFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!Array.isArray(d.instances)||!confirm('استبدال المساحات الحالية بالنسخة المستوردة؟'))return;items=d.instances.filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string').map(x=>({...x,active:!!x.active}));await persist();render();toast('تم استيراد النسخة')}catch{toast('ملف غير صالح')}e.target.value=''};
 load();
-</script></body></html>
+</script><script src="/space-enhancements.js"></script></body></html>
