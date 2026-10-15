@@ -61,7 +61,8 @@ Use an engine abstraction instead of coupling UI to one technique:
 - Per-instance private-data isolation: **not implemented yet**.
 - Multiple copies count UI backed by a real engine: **not implemented yet**.
 - GMS compatibility certification: **not implemented**.
-- Device/API test matrix and release APK validation: pending.
+- GitHub Actions debug APK build: passed on commit `7591e3500c528c58eaa76426455171ed8a95f3fb`; artifact uploaded. This confirms compilation only, not runtime cloning or device compatibility.
+- Device/API test matrix and physical-device validation: pending.
 
 ## Required release gates
 
