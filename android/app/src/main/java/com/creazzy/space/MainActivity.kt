@@ -19,6 +19,8 @@ class MainActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var search: EditText
     private var apps: List<AppRow> = emptyList()
+    private var favoritesOnly = false
+    private val favoritePackages: MutableSet<String> by lazy { getSharedPreferences("creazzy-space", MODE_PRIVATE).getStringSet("favorites", emptySet())?.toMutableSet() ?: mutableSetOf() }
     private data class AppRow(val label: String, val packageName: String, val system: Boolean)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,6 +55,7 @@ class MainActivity : Activity() {
         buttons.addView(actionButton("تحديث القائمة") { loadApps() }, LinearLayout.LayoutParams(0, dp(46), 1f))
         buttons.addView(actionButton("استيراد APK") { pickApk() }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginStart = dp(8) })
         root.addView(buttons, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        root.addView(actionButton("☆ عرض المفضلة فقط") { favoritesOnly = !favoritesOnly; renderApps(search.text?.toString().orEmpty()) }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(6) })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val scroll = ScrollView(this).apply { addView(list) }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(12) })
@@ -81,7 +84,7 @@ class MainActivity : Activity() {
         if (!::list.isInitialized) return
         list.removeAllViews()
         val q = query.trim().lowercase(Locale.getDefault())
-        val filtered = apps.filter { it.label.lowercase(Locale.getDefault()).contains(q) || it.packageName.lowercase(Locale.getDefault()).contains(q) }
+        val filtered = apps.filter { (!favoritesOnly || favoritePackages.contains(it.packageName)) && (it.label.lowercase(Locale.getDefault()).contains(q) || it.packageName.lowercase(Locale.getDefault()).contains(q)) }
         list.addView(TextView(this).apply {
             text = "التطبيقات القابلة للفتح: ${filtered.size}"; textSize = 12f
             setTextColor(0xFF6DE3D2.toInt()); setPadding(0, dp(4), 0, dp(8))
@@ -96,15 +99,27 @@ class MainActivity : Activity() {
                 text = app.packageName + if (app.system) " · نظام" else " · تطبيق"
                 textSize = 11f; setTextColor(0xFF94A3B8.toInt()); setPadding(0, dp(3), 0, dp(7))
             })
-            card.addView(Button(this).apply {
+            val rowButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            rowButtons.addView(Button(this).apply {
                 text = "فتح التطبيق"; isAllCaps = false
                 setOnClickListener {
                     val intent = packageManager.getLaunchIntentForPackage(app.packageName)
-                    if (intent != null) try { startActivity(intent) } catch (_: Exception) {
-                        Toast.makeText(this@MainActivity, "تعذر فتح التطبيق", Toast.LENGTH_SHORT).show()
-                    }
+                    if (intent != null) try {
+                        getSharedPreferences("creazzy-space", MODE_PRIVATE).edit().putString("last_opened", app.packageName).apply()
+                        startActivity(intent)
+                    } catch (_: Exception) { Toast.makeText(this@MainActivity, "تعذر فتح التطبيق", Toast.LENGTH_SHORT).show() }
                 }
-            })
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            rowButtons.addView(Button(this).apply {
+                text = if (favoritePackages.contains(app.packageName)) "★ مفضلة" else "☆ مفضلة"
+                isAllCaps = false
+                setOnClickListener {
+                    if (!favoritePackages.add(app.packageName)) favoritePackages.remove(app.packageName)
+                    getSharedPreferences("creazzy-space", MODE_PRIVATE).edit().putStringSet("favorites", favoritePackages.toSet()).apply()
+                    renderApps(search.text?.toString().orEmpty())
+                }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(rowButtons)
             list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
         if (filtered.isEmpty()) list.addView(TextView(this).apply {
