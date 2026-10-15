@@ -14,6 +14,7 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
+import java.util.zip.ZipFile
 
 class MainActivity : Activity() {
     private lateinit var list: LinearLayout
@@ -140,29 +141,108 @@ class MainActivity : Activity() {
         if (requestCode != REQUEST_APK || resultCode != RESULT_OK) return
         data?.data?.let { inspectAndInstall(it) }
     }
+    private data class ApkPreflight(
+        val label: String,
+        val packageName: String,
+        val version: String,
+        val targetSdk: Int,
+        val permissions: List<String>,
+        val abis: List<String>,
+        val warnings: List<String>
+    )
+
+    private fun inspectApk(apkFile: File): ApkPreflight? {
+        val info = packageManager.getPackageArchiveInfo(
+            apkFile.absolutePath,
+            android.content.pm.PackageManager.GET_PERMISSIONS or
+                android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        ) ?: return null
+        val label = info.applicationInfo?.loadLabel(packageManager)?.toString()
+            ?.takeIf { it.isNotBlank() } ?: info.packageName
+        val permissions = info.requestedPermissions?.toList().orEmpty()
+        val abis = mutableSetOf<String>()
+        try {
+            ZipFile(apkFile).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val name = entries.nextElement().name
+                    if (name.startsWith("lib/")) {
+                        val parts = name.split("/")
+                        if (parts.size >= 3 && parts[1].isNotBlank()) abis.add(parts[1])
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // The package parser already accepted the file; ZIP diagnostics are best-effort.
+        }
+        val warnings = mutableListOf<String>()
+        if (permissions.any { it.contains("com.google.android.c2dm", true) } ||
+            info.packageName.startsWith("com.google.android.", true) ||
+            info.packageName.startsWith("com.google.", true)) {
+            warnings.add("قد يعتمد التطبيق على Google Play Services أو هوية Google؛ إعادة التوقيع أو تغيير الحزمة قد يعطّل تسجيل الدخول أو الإشعارات.")
+        }
+        if (permissions.any {
+                it.contains("BILLING", true) ||
+                    it.contains("INTEGRITY", true) ||
+                    it.contains("CHECK_LICENSE", true)
+            }) {
+            warnings.add("تم رصد أذونات مرتبطة بالفوترة أو سلامة التطبيق؛ قد يرفض التطبيق نسخة معدّلة أو خارج المتجر.")
+        }
+        if (abis.isNotEmpty() && abis.none { it == "arm64-v8a" || it == "armeabi-v7a" }) {
+            warnings.add("ملفات المكتبات الأصلية لا تتضمن ABI شائعاً لأجهزة ARM؛ تحقق من توافق الهاتف.")
+        }
+        if (permissions.isEmpty()) {
+            warnings.add("لم تُستخرج قائمة أذونات من الحزمة؛ الفحص تمهيدي وليس تدقيقاً أمنياً كاملاً.")
+        }
+        warnings.add("هذا الفحص لا يثبت إمكانية الاستنساخ ولا يفحص سلوك الخادم أو التحقق من التوقيع داخل التطبيق.")
+        return ApkPreflight(
+            label = label,
+            packageName = info.packageName,
+            version = info.versionName ?: "غير معروف",
+            targetSdk = info.applicationInfo?.targetSdkVersion ?: 0,
+            permissions = permissions,
+            abis = abis.sorted(),
+            warnings = warnings
+        )
+    }
+
     private fun inspectAndInstall(uri: Uri) {
-        var apk: File? = null
+        var temporaryApk: File? = null
         try {
             val dir = File(cacheDir, "apks").apply { mkdirs() }
             val apkFile = File(dir, "selected-${System.currentTimeMillis()}.apk")
-            apk = apkFile
+            temporaryApk = apkFile
             contentResolver.openInputStream(uri).use { input ->
                 requireNotNull(input) { "لا يمكن قراءة الملف" }
                 FileOutputStream(apkFile).use { output -> input.copyTo(output) }
             }
-            val info = packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
-            if (info == null) {
+            val preflight = inspectApk(apkFile)
+            if (preflight == null) {
                 apkFile.delete()
                 Toast.makeText(this, "الملف ليس APK صالحاً أو غير مدعوم", Toast.LENGTH_LONG).show()
                 return
             }
-            val label = info.applicationInfo?.loadLabel(packageManager)?.toString() ?: info.packageName ?: "APK"
-            AlertDialog.Builder(this).setTitle("تم التعرف على ملف APK")
-                .setMessage("الاسم: $label\nالحزمة: ${info.packageName}\n\nسيتم تسليم الملف إلى مثبت Android الرسمي. ثبّت ملفات من مصادر موثوقة فقط.")
+            val warnings = preflight.warnings.joinToString("\n\n• ", prefix = "• ")
+            val abiText = preflight.abis.takeIf { it.isNotEmpty() }?.joinToString() ?: "لم يتم العثور على مكتبات native"
+            val permissionCount = preflight.permissions.size
+            AlertDialog.Builder(this)
+                .setTitle("فحص APK قبل المتابعة")
+                .setMessage(
+                    "الاسم: ${preflight.label}\n" +
+                        "الحزمة: ${preflight.packageName}\n" +
+                        "الإصدار: ${preflight.version}\n" +
+                        "Target SDK: ${preflight.targetSdk}\n" +
+                        "عدد الأذونات المعلنة: $permissionCount\n" +
+                        "معماريات native: $abiText\n\n" +
+                        "ملاحظات التوافق:\n$warnings\n\n" +
+                        "الخطوة التالية تثبيت الملف عبر Android فقط؛ هذا الإصدار لا ينشئ نسخة مستنسخة."
+                )
                 .setNegativeButton("إلغاء") { _, _ -> apkFile.delete() }
-                .setPositiveButton("متابعة إلى المثبت") { _, _ -> launchInstaller(apkFile) }.show()
+                .setPositiveButton("متابعة إلى مثبت Android") { _, _ -> launchInstaller(apkFile) }
+                .setOnCancelListener { apkFile.delete() }
+                .show()
         } catch (e: Exception) {
-            apk?.delete()
+            temporaryApk?.delete()
             Toast.makeText(this, "تعذر فحص APK: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
