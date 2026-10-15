@@ -1,9 +1,9 @@
 {
   "name": "creazzy-space",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Local-first workspace manager UI for Termux",
+  "description": "Local-first workspace manager with templates, activity log and CSV export for Termux",
   "scripts": {
     "start": "node server.mjs"
   },
