@@ -129,22 +129,23 @@ class MainActivity : Activity() {
         var apk: File? = null
         try {
             val dir = File(cacheDir, "apks").apply { mkdirs() }
-            apk = File(dir, "selected-${System.currentTimeMillis()}.apk")
+            val apkFile = File(dir, "selected-${System.currentTimeMillis()}.apk")
+            apk = apkFile
             contentResolver.openInputStream(uri).use { input ->
                 requireNotNull(input) { "لا يمكن قراءة الملف" }
-                FileOutputStream(apk).use { output -> input.copyTo(output) }
+                FileOutputStream(apkFile).use { output -> input.copyTo(output) }
             }
-            val info = packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
+            val info = packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
             if (info == null) {
-                apk.delete()
+                apkFile.delete()
                 Toast.makeText(this, "الملف ليس APK صالحاً أو غير مدعوم", Toast.LENGTH_LONG).show()
                 return
             }
             val label = info.applicationInfo?.loadLabel(packageManager)?.toString() ?: info.packageName ?: "APK"
             AlertDialog.Builder(this).setTitle("تم التعرف على ملف APK")
                 .setMessage("الاسم: $label\nالحزمة: ${info.packageName}\n\nسيتم تسليم الملف إلى مثبت Android الرسمي. ثبّت ملفات من مصادر موثوقة فقط.")
-                .setNegativeButton("إلغاء") { _, _ -> apk.delete() }
-                .setPositiveButton("متابعة إلى المثبت") { _, _ -> launchInstaller(apk) }.show()
+                .setNegativeButton("إلغاء") { _, _ -> apkFile.delete() }
+                .setPositiveButton("متابعة إلى المثبت") { _, _ -> launchInstaller(apkFile) }.show()
         } catch (e: Exception) {
             apk?.delete()
             Toast.makeText(this, "تعذر فحص APK: ${e.message}", Toast.LENGTH_LONG).show()
